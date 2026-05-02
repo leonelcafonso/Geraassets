@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Estúdio de Background: Base64 Grayscale</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #1e1e2f;
+            color: #ffffff;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px;
+            margin: 0;
+        }
+
+        .panel {
+            background: #2a2a40;
+            padding: 25px;
+            border-radius: 12px;
+            border: 1px solid #444466;
+            max-width: 500px;
+            width: 100%;
+            box-sizing: border-box;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+
+        h2 { margin-top: 0; color: #00d2ff; }
+        p { color: #aaa; font-size: 14px; margin-bottom: 20px; }
+
+        input[type="file"] { display: none; }
+
+        .btn {
+            display: inline-block;
+            padding: 12px 24px;
+            background: linear-gradient(90deg, #00d2ff 0%, #3a7bd5 100%);
+            color: #fff;
+            border: none;
+            border-radius: 8px;
+            font-weight: bold;
+            cursor: pointer;
+            margin-top: 10px;
+            transition: opacity 0.2s;
+        }
+        .btn:hover { opacity: 0.8; }
+        .btn-secondary { background: #555577; }
+
+        /* Controles de Zoom */
+        .zoom-control {
+            margin: 15px 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 15px;
+        }
+        input[type="range"] { width: 60%; }
+
+        /* Canvas de Recorte */
+        #crop-canvas {
+            background-color: #000;
+            border: 2px dashed #00d2ff;
+            border-radius: 8px;
+            cursor: move;
+            touch-action: none; /* Impede a página de rolar ao arrastar a foto */
+            user-select: none;
+        }
+
+        /* Área de Teste */
+        textarea {
+            width: 100%;
+            height: 100px;
+            background: #11111a;
+            color: #00d2ff;
+            border: 1px solid #444466;
+            border-radius: 8px;
+            padding: 10px;
+            font-family: monospace;
+            font-size: 12px;
+            box-sizing: border-box;
+            resize: vertical;
+        }
+
+        #test-canvas {
+            margin-top: 15px;
+            border: 2px solid #555577;
+            border-radius: 8px;
+            background-color: #000;
+        }
+
+        .hidden { display: none !important; }
+    </style>
+</head>
+<body>
+
+    <div class="panel" id="step1">
+        <h2>1. Preparar Imagem</h2>
+        <p>Escolha uma foto e ajuste-a para o formato quadrado perfeito do tabuleiro.</p>
+        
+        <label for="imageUpload" class="btn">Selecionar Foto</label>
+        <input type="file" id="imageUpload" accept="image/*">
+
+        <div id="crop-ui" class="hidden">
+            <p style="margin: 15px 0 5px; color: #ffeb3b;">Arraste para posicionar. Use a barra para zoom.</p>
+            <canvas id="crop-canvas" width="360" height="360"></canvas>
+            
+            <div class="zoom-control">
+                <span style="font-size: 24px;">-</span>
+                <input type="range" id="zoomSlider" min="0.1" max="3" step="0.01" value="1">
+                <span style="font-size: 24px;">+</span>
+            </div>
+
+            <button id="generateBtn" class="btn">Gerar Código Base64 e Baixar .txt</button>
+        </div>
+    </div>
+
+    <div class="panel">
+        <h2>2. Teste do Decodificador</h2>
+        <p>Cole o código Base64 gerado abaixo para testar se a imagem é reconstruída perfeitamente, exatamente como o jogo fará.</p>
+        
+        <textarea id="base64Input" placeholder="Cole o texto do arquivo .txt gerado aqui..."></textarea>
+        <button id="testBtn" class="btn btn-secondary">Renderizar Imagem Copiada</button>
+        
+        <div style="text-align: center;">
+            <canvas id="test-canvas" class="hidden"></canvas>
+        </div>
+    </div>
+
+    <script>
+        // ==========================================
+        // CONFIGURAÇÕES E ESTADO
+        // ==========================================
+        const BOARD_SIZE = 360; // 360x360 pixels (perfeito para nosso grid de 8x8 onde cada célula tem 45px)
+
+        // Variáveis do Crop
+        let userImage = new Image();
+        let imgPanX = 0; let imgPanY = 0; let imgScale = 1;
+        let isDragging = false; let startDragX = 0; let startDragY = 0;
+
+        // Elementos UI
+        const imageUpload = document.getElementById('imageUpload');
+        const cropUI = document.getElementById('crop-ui');
+        const cropCanvas = document.getElementById('crop-canvas');
+        const cropCtx = cropCanvas.getContext('2d');
+        const zoomSlider = document.getElementById('zoomSlider');
+        const generateBtn = document.getElementById('generateBtn');
+
+        // ==========================================
+        // 1. CARREGAMENTO E CORTE DA IMAGEM
+        // ==========================================
+        imageUpload.addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(event) {
+                userImage.onload = function() {
+                    // Calcula o zoom inicial para cobrir o quadrado todo
+                    const scaleToFit = Math.max(BOARD_SIZE / userImage.width, BOARD_SIZE / userImage.height);
+                    imgScale = scaleToFit;
+                    
+                    // Centraliza a imagem no quadro
+                    imgPanX = (BOARD_SIZE - (userImage.width * imgScale)) / 2;
+                    imgPanY = (BOARD_SIZE - (userImage.height * imgScale)) / 2;
+
+                    zoomSlider.min = scaleToFit * 0.5;
+                    zoomSlider.max = scaleToFit * 4;
+                    zoomSlider.value = imgScale;
+
+                    cropUI.classList.remove('hidden');
+                    drawCropView();
+                };
+                userImage.src = event.target.result;
+            };
+            reader.readAsDataURL(file);
+        });
+
+        // Atualiza zoom
+        zoomSlider.addEventListener('input', function(e) {
+            const centerX = BOARD_SIZE / 2;
+            const centerY = BOARD_SIZE / 2;
+            const oldScale = imgScale;
+            imgScale = parseFloat(e.target.value);
+            
+            // Mantém o centro da imagem no lugar enquanto dá zoom
+            imgPanX = centerX - (centerX - imgPanX) * (imgScale / oldScale);
+            imgPanY = centerY - (centerY - imgPanY) * (imgScale / oldScale);
+            drawCropView();
+        });
+
+        // Arrasta (Pan)
+        cropCanvas.addEventListener('pointerdown', (e) => {
+            isDragging = true;
+            startDragX = e.clientX - imgPanX;
+            startDragY = e.clientY - imgPanY;
+        });
+
+        window.addEventListener('pointermove', (e) => {
+            if (!isDragging) return;
+            imgPanX = e.clientX - startDragX;
+            imgPanY = e.clientY - startDragY;
+            drawCropView();
+        });
+
+        window.addEventListener('pointerup', () => isDragging = false);
+
+        function drawCropView() {
+            cropCtx.fillStyle = '#000';
+            cropCtx.fillRect(0, 0, BOARD_SIZE, BOARD_SIZE);
+            cropCtx.drawImage(userImage, imgPanX, imgPanY, userImage.width * imgScale, userImage.height * imgScale);
+            
+            // Grade de referência (8x8) transparente
+            cropCtx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
+            cropCtx.lineWidth = 1;
+            cropCtx.beginPath();
+            for(let i = 1; i < 8; i++) {
+                cropCtx.moveTo(0, i * (BOARD_SIZE/8));
+                cropCtx.lineTo(BOARD_SIZE, i * (BOARD_SIZE/8));
+                cropCtx.moveTo(i * (BOARD_SIZE/8), 0);
+                cropCtx.lineTo(i * (BOARD_SIZE/8), BOARD_SIZE);
+            }
+            cropCtx.stroke();
+        }
+
+        // ==========================================
+        // 2. ENCODER: CONVERTER PARA BASE64 E BAIXAR
+        // ==========================================
+        generateBtn.addEventListener('click', function() {
+            // Desenha a imagem cortada pura num canvas invisível temporário
+            const tempCanvas = document.createElement('canvas');
+            tempCanvas.width = BOARD_SIZE;
+            tempCanvas.height = BOARD_SIZE;
+            const tempCtx = tempCanvas.getContext('2d');
+            
+            tempCtx.fillStyle = '#000';
+            tempCtx.fillRect(0, 0, BOARD_SIZE, BOARD_SIZE);
+            tempCtx.drawImage(userImage, imgPanX, imgPanY, userImage.width * imgScale, userImage.height * imgScale);
+
+            // Pega os dados dos pixels
+            const imgData = tempCtx.getImageData(0, 0, BOARD_SIZE, BOARD_SIZE).data;
+            
+            // Cria um Array de Bytes apenas para o nível de cinza (1 byte por pixel em vez de 4 do RGBA)
+            const grayBytes = new Uint8Array(BOARD_SIZE * BOARD_SIZE);
+            for(let i = 0; i < imgData.length; i += 4) {
+                // R * 0.299 + G * 0.587 + B * 0.114
+                grayBytes[i / 4] = Math.floor(imgData[i] * 0.299 + imgData[i+1] * 0.587 + imgData[i+2] * 0.114);
+            }
+
+            // Converte os Bytes para uma String Binária e depois para Base64 Seguro
+            let binaryString = '';
+            // Construímos a string em pequenos lotes para não estourar a memória do navegador
+            for (let i = 0; i < grayBytes.length; i++) {
+                binaryString += String.fromCharCode(grayBytes[i]);
+            }
+            
+            const base64String = btoa(binaryString);
+            
+            // Cria a string final com os metadados
+            const finalTxtData = `${BOARD_SIZE},${BOARD_SIZE}|${base64String}`;
+
+            // Dispara o Download
+            const blob = new Blob([finalTxtData], { type: 'text/plain' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement("a");
+            link.href = url;
+            link.download = "bg_candy_crush.txt";
+            document.body.appendChild(link);
+            link.click();
+            setTimeout(() => { document.body.removeChild(link); URL.revokeObjectURL(url); }, 100);
+
+            // Já preenche a área de teste para o usuário não ter que abrir o arquivo se não quiser
+            document.getElementById('base64Input').value = finalTxtData;
+            alert("Sucesso! Código gerado. Você pode copiar o texto da caixa de teste ou abrir o arquivo .txt baixado.");
+        });
+
+        // ==========================================
+        // 3. DECODER: TESTAR A STRING GERADA
+        // ==========================================
+        const testBtn = document.getElementById('testBtn');
+        const testCanvas = document.getElementById('test-canvas');
+        const testCtx = testCanvas.getContext('2d');
+
+        testBtn.addEventListener('click', function() {
+            const input = document.getElementById('base64Input').value.trim();
+            if(!input) return alert("Cole o código gerado primeiro!");
+
+            try {
+                // Separa metadados da imagem Base64
+                const parts = input.split('|');
+                const dims = parts[0].split(',');
+                const width = parseInt(dims[0]);
+                const height = parseInt(dims[1]);
+                const base64Data = parts[1];
+
+                // Desfaz o Base64 para String Binária
+                const binaryString = atob(base64Data);
+
+                // Configura o Canvas de teste
+                testCanvas.width = width;
+                testCanvas.height = height;
+                const newImgData = testCtx.createImageData(width, height);
+                const data = newImgData.data;
+
+                // Restaura cada pixel (Espalhando o tom de cinza para o RGB do canvas)
+                for (let i = 0; i < binaryString.length; i++) {
+                    const grayValue = binaryString.charCodeAt(i);
+                    const idx = i * 4;
+                    data[idx]     = grayValue; // Red
+                    data[idx + 1] = grayValue; // Green
+                    data[idx + 2] = grayValue; // Blue
+                    data[idx + 3] = 255;       // Alpha (opacidade)
+                }
+
+                testCtx.putImageData(newImgData, 0, 0);
+                testCanvas.classList.remove('hidden');
+
+            } catch (err) {
+                alert("Código Base64 inválido ou corrompido!");
+                console.error(err);
+            }
+        });
+    </script>
+</body>
+</html>
