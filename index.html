@@ -2,13 +2,13 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>Estúdio de Background: Base64 Grayscale</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Asset Studio: Empacotador Criptografado</title>
     <style>
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background-color: #1e1e2f;
-            color: #ffffff;
+            background-color: #1a1a24;
+            color: #e0e0e0;
             display: flex;
             flex-direction: column;
             align-items: center;
@@ -17,151 +17,168 @@
         }
 
         .panel {
-            background: #2a2a40;
+            background: #252533;
             padding: 25px;
             border-radius: 12px;
-            border: 1px solid #444466;
-            max-width: 500px;
+            border: 1px solid #3a3a4f;
+            max-width: 700px;
             width: 100%;
-            box-sizing: border-box;
-            margin-bottom: 20px;
             text-align: center;
         }
 
-        h2 { margin-top: 0; color: #00d2ff; }
+        h2 { color: #ff5e62; margin-top: 0; }
         p { color: #aaa; font-size: 14px; margin-bottom: 20px; }
+
+        /* Grid de 10 Slots */
+        .slots-grid {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 15px;
+            margin-bottom: 25px;
+        }
+
+        .slot {
+            background: #1e1e2a;
+            border: 2px dashed #444466;
+            border-radius: 8px;
+            aspect-ratio: 1 / 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            overflow: hidden;
+            position: relative;
+            transition: border-color 0.2s;
+        }
+        
+        .slot:hover { border-color: #ff5e62; }
+        .slot img { width: 100%; height: 100%; object-fit: cover; }
+        .slot .label { position: absolute; background: rgba(0,0,0,0.7); width: 100%; bottom: 0; font-size: 12px; padding: 5px 0; }
 
         input[type="file"] { display: none; }
 
         .btn {
             display: inline-block;
             padding: 12px 24px;
-            background: linear-gradient(90deg, #00d2ff 0%, #3a7bd5 100%);
+            background: linear-gradient(90deg, #ff9966 0%, #ff5e62 100%);
             color: #fff;
             border: none;
             border-radius: 8px;
             font-weight: bold;
             cursor: pointer;
-            margin-top: 10px;
+            font-size: 16px;
             transition: opacity 0.2s;
         }
         .btn:hover { opacity: 0.8; }
-        .btn-secondary { background: #555577; }
+        .btn:disabled { background: #555; cursor: not-allowed; opacity: 0.5; }
 
-        /* Controles de Zoom */
-        .zoom-control {
-            margin: 15px 0;
+        /* Modal do Editor */
+        #editor-modal {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0, 0, 0, 0.9);
             display: flex;
+            flex-direction: column;
             align-items: center;
             justify-content: center;
-            gap: 15px;
+            z-index: 100;
         }
-        input[type="range"] { width: 60%; }
 
-        /* Canvas de Recorte */
         #crop-canvas {
             background-color: #000;
-            border: 2px dashed #00d2ff;
+            border: 2px dashed #ff5e62;
             border-radius: 8px;
             cursor: move;
-            touch-action: none; /* Impede a página de rolar ao arrastar a foto */
             user-select: none;
+            touch-action: none;
         }
 
-        /* Área de Teste */
-        textarea {
-            width: 100%;
-            height: 100px;
-            background: #11111a;
-            color: #00d2ff;
-            border: 1px solid #444466;
-            border-radius: 8px;
-            padding: 10px;
-            font-family: monospace;
-            font-size: 12px;
-            box-sizing: border-box;
-            resize: vertical;
-        }
-
-        #test-canvas {
-            margin-top: 15px;
-            border: 2px solid #555577;
-            border-radius: 8px;
-            background-color: #000;
-        }
-
+        .editor-controls { margin-top: 20px; display: flex; gap: 15px; align-items: center; }
+        input[type="range"] { width: 200px; }
         .hidden { display: none !important; }
     </style>
 </head>
 <body>
 
-    <div class="panel" id="step1">
-        <h2>1. Preparar Imagem</h2>
-        <p>Escolha uma foto e ajuste-a para o formato quadrado perfeito do tabuleiro.</p>
+    <div class="panel">
+        <h2>Pacote de Assets (Colorido)</h2>
+        <p>Clique em um slot para carregar, cortar e converter sua imagem para JPG criptografado.</p>
         
-        <label for="imageUpload" class="btn">Selecionar Foto</label>
-        <input type="file" id="imageUpload" accept="image/*">
-
-        <div id="crop-ui" class="hidden">
-            <p style="margin: 15px 0 5px; color: #ffeb3b;">Arraste para posicionar. Use a barra para zoom.</p>
-            <canvas id="crop-canvas" width="360" height="360"></canvas>
-            
-            <div class="zoom-control">
-                <span style="font-size: 24px;">-</span>
-                <input type="range" id="zoomSlider" min="0.1" max="3" step="0.01" value="1">
-                <span style="font-size: 24px;">+</span>
-            </div>
-
-            <button id="generateBtn" class="btn">Gerar Código Base64 e Baixar .txt</button>
+        <div class="slots-grid" id="slots-container">
+            <!-- Os 10 slots serão gerados via JS -->
         </div>
+
+        <input type="file" id="imageUpload" accept="image/*">
+        
+        <button id="generateBtn" class="btn" disabled>Gerar sys_config.bin</button>
     </div>
 
-    <div class="panel">
-        <h2>2. Teste do Decodificador</h2>
-        <p>Cole o código Base64 gerado abaixo para testar se a imagem é reconstruída perfeitamente, exatamente como o jogo fará.</p>
+    <!-- Modal de Edição (Corte e Zoom) -->
+    <div id="editor-modal" class="hidden">
+        <h3 style="color: #ff5e62;">Ajuste o Enquadramento</h3>
+        <canvas id="crop-canvas" width="360" height="360"></canvas>
         
-        <textarea id="base64Input" placeholder="Cole o texto do arquivo .txt gerado aqui..."></textarea>
-        <button id="testBtn" class="btn btn-secondary">Renderizar Imagem Copiada</button>
+        <div class="editor-controls">
+            <span>-</span>
+            <input type="range" id="zoomSlider" min="0.1" max="3" step="0.01" value="1">
+            <span>+</span>
+        </div>
         
-        <div style="text-align: center;">
-            <canvas id="test-canvas" class="hidden"></canvas>
+        <div class="editor-controls" style="margin-top: 15px;">
+            <button id="cancelBtn" class="btn" style="background: #555;">Cancelar</button>
+            <button id="confirmBtn" class="btn">Salvar JPG</button>
         </div>
     </div>
 
     <script>
-        // ==========================================
-        // CONFIGURAÇÕES E ESTADO
-        // ==========================================
-        const BOARD_SIZE = 360; // 360x360 pixels (perfeito para nosso grid de 8x8 onde cada célula tem 45px)
+        const MAX_IMAGES = 10;
+        const BOARD_SIZE = 360;
+        const XOR_KEY = 42; // A nossa "senha" criptográfica
 
-        // Variáveis do Crop
-        let userImage = new Image();
-        let imgPanX = 0; let imgPanY = 0; let imgScale = 1;
-        let isDragging = false; let startDragX = 0; let startDragY = 0;
+        // Memória do Estúdio
+        let processedImages = new Array(MAX_IMAGES).fill(null); // Vai guardar os bytes de cada JPG
+        let currentSlot = -1;
 
-        // Elementos UI
+        // UI Elements
+        const slotsContainer = document.getElementById('slots-container');
         const imageUpload = document.getElementById('imageUpload');
-        const cropUI = document.getElementById('crop-ui');
+        const generateBtn = document.getElementById('generateBtn');
+        const editorModal = document.getElementById('editor-modal');
         const cropCanvas = document.getElementById('crop-canvas');
         const cropCtx = cropCanvas.getContext('2d');
         const zoomSlider = document.getElementById('zoomSlider');
-        const generateBtn = document.getElementById('generateBtn');
+        const cancelBtn = document.getElementById('cancelBtn');
+        const confirmBtn = document.getElementById('confirmBtn');
 
-        // ==========================================
-        // 1. CARREGAMENTO E CORTE DA IMAGEM
-        // ==========================================
+        // Editor Variables
+        let userImage = new Image();
+        let imgPanX = 0, imgPanY = 0, imgScale = 1;
+        let isDragging = false, startDragX = 0, startDragY = 0;
+
+        // 1. GERAR OS 10 SLOTS NA TELA
+        for (let i = 0; i < MAX_IMAGES; i++) {
+            const slot = document.createElement('div');
+            slot.className = 'slot';
+            slot.id = `slot-${i}`;
+            slot.innerHTML = `<span style="color: #666; font-size: 24px;">+</span><div class="label">Nível ${i+1}</div>`;
+            slot.addEventListener('click', () => {
+                currentSlot = i;
+                imageUpload.click();
+            });
+            slotsContainer.appendChild(slot);
+        }
+
+        // 2. ABRIR O EDITOR AO SELECIONAR ARQUIVO
         imageUpload.addEventListener('change', function(e) {
             const file = e.target.files[0];
             if (!file) return;
 
             const reader = new FileReader();
             reader.onload = function(event) {
+                userImage = new Image();
                 userImage.onload = function() {
-                    // Calcula o zoom inicial para cobrir o quadrado todo
                     const scaleToFit = Math.max(BOARD_SIZE / userImage.width, BOARD_SIZE / userImage.height);
                     imgScale = scaleToFit;
-                    
-                    // Centraliza a imagem no quadro
                     imgPanX = (BOARD_SIZE - (userImage.width * imgScale)) / 2;
                     imgPanY = (BOARD_SIZE - (userImage.height * imgScale)) / 2;
 
@@ -169,28 +186,26 @@
                     zoomSlider.max = scaleToFit * 4;
                     zoomSlider.value = imgScale;
 
-                    cropUI.classList.remove('hidden');
+                    editorModal.classList.remove('hidden');
                     drawCropView();
                 };
                 userImage.src = event.target.result;
             };
             reader.readAsDataURL(file);
+            imageUpload.value = ''; // Limpa o input para poder subir o mesmo arquivo de novo se quiser
         });
 
-        // Atualiza zoom
+        // Controles do Editor
         zoomSlider.addEventListener('input', function(e) {
             const centerX = BOARD_SIZE / 2;
             const centerY = BOARD_SIZE / 2;
             const oldScale = imgScale;
             imgScale = parseFloat(e.target.value);
-            
-            // Mantém o centro da imagem no lugar enquanto dá zoom
             imgPanX = centerX - (centerX - imgPanX) * (imgScale / oldScale);
             imgPanY = centerY - (centerY - imgPanY) * (imgScale / oldScale);
             drawCropView();
         });
 
-        // Arrasta (Pan)
         cropCanvas.addEventListener('pointerdown', (e) => {
             isDragging = true;
             startDragX = e.clientX - imgPanX;
@@ -207,12 +222,13 @@
         window.addEventListener('pointerup', () => isDragging = false);
 
         function drawCropView() {
+            // Fundo preto (Previne problemas se a imagem enviada for PNG transparente)
             cropCtx.fillStyle = '#000';
             cropCtx.fillRect(0, 0, BOARD_SIZE, BOARD_SIZE);
             cropCtx.drawImage(userImage, imgPanX, imgPanY, userImage.width * imgScale, userImage.height * imgScale);
             
-            // Grade de referência (8x8) transparente
-            cropCtx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
+            // Grade
+            cropCtx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
             cropCtx.lineWidth = 1;
             cropCtx.beginPath();
             for(let i = 1; i < 8; i++) {
@@ -224,102 +240,88 @@
             cropCtx.stroke();
         }
 
-        // ==========================================
-        // 2. ENCODER: CONVERTER PARA BASE64 E BAIXAR
-        // ==========================================
-        generateBtn.addEventListener('click', function() {
-            // Desenha a imagem cortada pura num canvas invisível temporário
+        cancelBtn.addEventListener('click', () => editorModal.classList.add('hidden'));
+
+        // 3. CONFIRMAR, CONVERTER PARA JPG E SALVAR NA MEMÓRIA
+        confirmBtn.addEventListener('click', () => {
+            // Desenha a imagem pura sem a grade em um canvas temporário
             const tempCanvas = document.createElement('canvas');
-            tempCanvas.width = BOARD_SIZE;
-            tempCanvas.height = BOARD_SIZE;
+            tempCanvas.width = BOARD_SIZE; tempCanvas.height = BOARD_SIZE;
             const tempCtx = tempCanvas.getContext('2d');
-            
             tempCtx.fillStyle = '#000';
             tempCtx.fillRect(0, 0, BOARD_SIZE, BOARD_SIZE);
             tempCtx.drawImage(userImage, imgPanX, imgPanY, userImage.width * imgScale, userImage.height * imgScale);
 
-            // Pega os dados dos pixels
-            const imgData = tempCtx.getImageData(0, 0, BOARD_SIZE, BOARD_SIZE).data;
+            // A MÁGICA DO JPG: Força a conversão para jpeg ignorando o formato original
+            const dataUrl = tempCanvas.toDataURL('image/jpeg', 0.85); // Qualidade de 85%
             
-            // Cria um Array de Bytes apenas para o nível de cinza (1 byte por pixel em vez de 4 do RGBA)
-            const grayBytes = new Uint8Array(BOARD_SIZE * BOARD_SIZE);
-            for(let i = 0; i < imgData.length; i += 4) {
-                // R * 0.299 + G * 0.587 + B * 0.114
-                grayBytes[i / 4] = Math.floor(imgData[i] * 0.299 + imgData[i+1] * 0.587 + imgData[i+2] * 0.114);
-            }
+            // Atualiza a Thumbnail no Slot
+            const slot = document.getElementById(`slot-${currentSlot}`);
+            slot.innerHTML = `<img src="${dataUrl}"><div class="label">Nível ${currentSlot+1}</div>`;
 
-            // Converte os Bytes para uma String Binária e depois para Base64 Seguro
-            let binaryString = '';
-            // Construímos a string em pequenos lotes para não estourar a memória do navegador
-            for (let i = 0; i < grayBytes.length; i++) {
-                binaryString += String.fromCharCode(grayBytes[i]);
+            // Transforma o Base64 do DataURL de volta para Bytes Reais e guarda na memória
+            const base64Data = dataUrl.split(',')[1];
+            const binaryString = atob(base64Data);
+            const bytes = new Uint8Array(binaryString.length);
+            for (let i = 0; i < binaryString.length; i++) {
+                bytes[i] = binaryString.charCodeAt(i);
             }
             
-            const base64String = btoa(binaryString);
-            
-            // Cria a string final com os metadados
-            const finalTxtData = `${BOARD_SIZE},${BOARD_SIZE}|${base64String}`;
+            processedImages[currentSlot] = bytes;
+            editorModal.classList.add('hidden');
+            checkReadyStatus();
+        });
 
-            // Dispara o Download
-            const blob = new Blob([finalTxtData], { type: 'text/plain' });
+        function checkReadyStatus() {
+            // Habilita o botão de gerar se tiver pelo menos 1 imagem preenchida
+            const hasAtLeastOne = processedImages.some(img => img !== null);
+            generateBtn.disabled = !hasAtLeastOne;
+        }
+
+        // 4. O EMPACOTADOR XOR (CRIAR O SYS_CONFIG.BIN)
+        generateBtn.addEventListener('click', () => {
+            // Coleta os tamanhos de cada imagem na ordem exata. Se não tiver imagem, tamanho é 0.
+            const sizes = processedImages.map(img => img ? img.length : 0);
+            
+            // Cria um cabeçalho em texto para que o Jogo saiba como cortar o arquivo depois
+            // Ex: "45000,0,32000,..."
+            const headerStr = sizes.join(',') + '|';
+            const headerBytes = new TextEncoder().encode(headerStr);
+
+            // Calcula o tamanho total do "Bloco"
+            let totalLength = headerBytes.length;
+            processedImages.forEach(img => { if(img) totalLength += img.length; });
+
+            // Cria o "Arquivo Único" em branco
+            const finalBuffer = new Uint8Array(totalLength);
+            
+            // Cola o cabeçalho no começo
+            finalBuffer.set(headerBytes, 0);
+
+            // Cola as imagens em seguida, uma após a outra
+            let offset = headerBytes.length;
+            processedImages.forEach(img => {
+                if(img) {
+                    finalBuffer.set(img, offset);
+                    offset += img.length;
+                }
+            });
+
+            // A MÁSCARA XOR: Varre cada byte do arquivo único e inverte com a chave 42
+            // Isso destrói o cabeçalho das imagens JPG. Se tentar abrir, dá erro.
+            for (let i = 0; i < finalBuffer.length; i++) {
+                finalBuffer[i] = finalBuffer[i] ^ XOR_KEY;
+            }
+
+            // Inicia o download com o nome camuflado
+            const blob = new Blob([finalBuffer], { type: 'application/octet-stream' });
             const url = URL.createObjectURL(blob);
             const link = document.createElement("a");
             link.href = url;
-            link.download = "bg_candy_crush.txt";
+            link.download = "sys_config.bin";
             document.body.appendChild(link);
             link.click();
             setTimeout(() => { document.body.removeChild(link); URL.revokeObjectURL(url); }, 100);
-
-            // Já preenche a área de teste para o usuário não ter que abrir o arquivo se não quiser
-            document.getElementById('base64Input').value = finalTxtData;
-            alert("Sucesso! Código gerado. Você pode copiar o texto da caixa de teste ou abrir o arquivo .txt baixado.");
-        });
-
-        // ==========================================
-        // 3. DECODER: TESTAR A STRING GERADA
-        // ==========================================
-        const testBtn = document.getElementById('testBtn');
-        const testCanvas = document.getElementById('test-canvas');
-        const testCtx = testCanvas.getContext('2d');
-
-        testBtn.addEventListener('click', function() {
-            const input = document.getElementById('base64Input').value.trim();
-            if(!input) return alert("Cole o código gerado primeiro!");
-
-            try {
-                // Separa metadados da imagem Base64
-                const parts = input.split('|');
-                const dims = parts[0].split(',');
-                const width = parseInt(dims[0]);
-                const height = parseInt(dims[1]);
-                const base64Data = parts[1];
-
-                // Desfaz o Base64 para String Binária
-                const binaryString = atob(base64Data);
-
-                // Configura o Canvas de teste
-                testCanvas.width = width;
-                testCanvas.height = height;
-                const newImgData = testCtx.createImageData(width, height);
-                const data = newImgData.data;
-
-                // Restaura cada pixel (Espalhando o tom de cinza para o RGB do canvas)
-                for (let i = 0; i < binaryString.length; i++) {
-                    const grayValue = binaryString.charCodeAt(i);
-                    const idx = i * 4;
-                    data[idx]     = grayValue; // Red
-                    data[idx + 1] = grayValue; // Green
-                    data[idx + 2] = grayValue; // Blue
-                    data[idx + 3] = 255;       // Alpha (opacidade)
-                }
-
-                testCtx.putImageData(newImgData, 0, 0);
-                testCanvas.classList.remove('hidden');
-
-            } catch (err) {
-                alert("Código Base64 inválido ou corrompido!");
-                console.error(err);
-            }
         });
     </script>
 </body>
