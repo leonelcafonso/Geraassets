@@ -2,596 +2,325 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <!-- Meta tags para o iPhone tratar como um App de verdade -->
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="apple-mobile-web-app-title" content="Emoji Crush">
-    
-    <title>Emoji Crush: Modo Campanha</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Estúdio de Background: Base64 Grayscale</title>
     <style>
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background-color: #111;
+            background-color: #1e1e2f;
             color: #ffffff;
             display: flex;
             flex-direction: column;
             align-items: center;
             padding: 20px;
             margin: 0;
-            touch-action: manipulation;
         }
 
-        .header { text-align: center; margin-bottom: 15px; }
-        h2 { margin: 0 0 5px 0; color: #00d2ff; font-size: 28px; }
-        
-        #score-board {
-            font-size: 16px;
-            font-weight: bold;
-            background: rgba(30, 20, 35, 0.8);
-            padding: 10px 20px;
-            border-radius: 20px;
-            border: 2px solid #00d2ff;
-            display: inline-block;
-            backdrop-filter: blur(5px);
-        }
-
-        /* Tela de Loading Inicial */
-        #loading-screen {
-            position: absolute;
-            top: 0; left: 0; right: 0; bottom: 0;
-            background: #111;
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
-            z-index: 50;
-        }
-        .spinner {
-            width: 50px; height: 50px;
-            border: 5px solid #444466;
-            border-top: 5px solid #00d2ff;
-            border-radius: 50%;
-            animation: spin 1s linear infinite;
+        .panel {
+            background: #2a2a40;
+            padding: 25px;
+            border-radius: 12px;
+            border: 1px solid #444466;
+            max-width: 500px;
+            width: 100%;
+            box-sizing: border-box;
             margin-bottom: 20px;
-        }
-        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-
-        canvas {
-            background-color: #000;
-            border: 4px solid #444466;
-            border-radius: 10px;
-            box-shadow: 0 10px 40px rgba(0, 210, 255, 0.2);
-            cursor: pointer;
-            touch-action: none;
-        }
-
-        #message-panel {
-            margin-top: 20px;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
             text-align: center;
-            min-height: 100px;
         }
 
-        #message-panel h3 { font-size: 32px; margin: 0 0 10px 0; text-transform: uppercase; text-shadow: 0 2px 10px rgba(0,0,0,0.5); }
-        #message-panel p { font-size: 16px; margin: 0 0 15px 0; color: #ccc; }
-        
-        button {
+        h2 { margin-top: 0; color: #00d2ff; }
+        p { color: #aaa; font-size: 14px; margin-bottom: 20px; }
+
+        input[type="file"] { display: none; }
+
+        .btn {
+            display: inline-block;
             padding: 12px 24px;
             background: linear-gradient(90deg, #00d2ff 0%, #3a7bd5 100%);
-            color: white;
+            color: #fff;
             border: none;
-            border-radius: 25px;
-            font-size: 18px;
+            border-radius: 8px;
             font-weight: bold;
             cursor: pointer;
-            transition: transform 0.1s;
+            margin-top: 10px;
+            transition: opacity 0.2s;
         }
-        button:active { transform: scale(0.95); }
+        .btn:hover { opacity: 0.8; }
+        .btn-secondary { background: #555577; }
+
+        /* Controles de Zoom */
+        .zoom-control {
+            margin: 15px 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 15px;
+        }
+        input[type="range"] { width: 60%; }
+
+        /* Canvas de Recorte */
+        #crop-canvas {
+            background-color: #000;
+            border: 2px dashed #00d2ff;
+            border-radius: 8px;
+            cursor: move;
+            touch-action: none; /* Impede a página de rolar ao arrastar a foto */
+            user-select: none;
+        }
+
+        /* Área de Teste */
+        textarea {
+            width: 100%;
+            height: 100px;
+            background: #11111a;
+            color: #00d2ff;
+            border: 1px solid #444466;
+            border-radius: 8px;
+            padding: 10px;
+            font-family: monospace;
+            font-size: 12px;
+            box-sizing: border-box;
+            resize: vertical;
+        }
+
+        #test-canvas {
+            margin-top: 15px;
+            border: 2px solid #555577;
+            border-radius: 8px;
+            background-color: #000;
+        }
+
         .hidden { display: none !important; }
     </style>
 </head>
 <body>
 
-    <!-- TELA DE CARREGAMENTO (ASSET BUNDLE) -->
-    <div id="loading-screen">
-        <div class="spinner"></div>
-        <h3 id="loading-text">Descompactando Fases...</h3>
-    </div>
+    <div class="panel" id="step1">
+        <h2>1. Preparar Imagem</h2>
+        <p>Escolha uma foto e ajuste-a para o formato quadrado perfeito do tabuleiro.</p>
+        
+        <label for="imageUpload" class="btn">Selecionar Foto</label>
+        <input type="file" id="imageUpload" accept="image/*">
 
-    <div class="header">
-        <h2>Emoji Crush</h2>
-        <div id="score-board">
-            Fase: <span id="level">1</span> | Pontos: <span id="score">0</span> | Faltam: <span id="remaining">64</span>
+        <div id="crop-ui" class="hidden">
+            <p style="margin: 15px 0 5px; color: #ffeb3b;">Arraste para posicionar. Use a barra para zoom.</p>
+            <canvas id="crop-canvas" width="360" height="360"></canvas>
+            
+            <div class="zoom-control">
+                <span style="font-size: 24px;">-</span>
+                <input type="range" id="zoomSlider" min="0.1" max="3" step="0.01" value="1">
+                <span style="font-size: 24px;">+</span>
+            </div>
+
+            <button id="generateBtn" class="btn">Gerar Código Base64 e Baixar .txt</button>
         </div>
     </div>
 
-    <canvas id="game-canvas"></canvas>
-    
-    <div id="message-panel" class="hidden">
-        <h3 id="end-title"></h3>
-        <p id="end-desc"></p>
-        <button id="restartBtn">Próxima Fase</button>
+    <div class="panel">
+        <h2>2. Teste do Decodificador</h2>
+        <p>Cole o código Base64 gerado abaixo para testar se a imagem é reconstruída perfeitamente, exatamente como o jogo fará.</p>
+        
+        <textarea id="base64Input" placeholder="Cole o texto do arquivo .txt gerado aqui..."></textarea>
+        <button id="testBtn" class="btn btn-secondary">Renderizar Imagem Copiada</button>
+        
+        <div style="text-align: center;">
+            <canvas id="test-canvas" class="hidden"></canvas>
+        </div>
     </div>
 
     <script>
         // ==========================================
-        // SINTETIZADOR DE ÁUDIO 8-BITS
+        // CONFIGURAÇÕES E ESTADO
         // ==========================================
-        const AudioContext = window.AudioContext || window.webkitAudioContext;
-        const audioCtx = new AudioContext();
+        const BOARD_SIZE = 360; // 360x360 pixels (perfeito para nosso grid de 8x8 onde cada célula tem 45px)
 
-        function playTone(frequency, type, duration, delay = 0) {
-            if (audioCtx.state === 'suspended') audioCtx.resume();
-            const oscillator = audioCtx.createOscillator();
-            const gainNode = audioCtx.createGain();
-            oscillator.type = type;
-            oscillator.frequency.setValueAtTime(frequency, audioCtx.currentTime + delay);
-            gainNode.gain.setValueAtTime(0.1, audioCtx.currentTime + delay);
-            gainNode.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + delay + duration);
-            oscillator.connect(gainNode);
-            gainNode.connect(audioCtx.destination);
-            oscillator.start(audioCtx.currentTime + delay);
-            oscillator.stop(audioCtx.currentTime + delay + duration);
+        // Variáveis do Crop
+        let userImage = new Image();
+        let imgPanX = 0; let imgPanY = 0; let imgScale = 1;
+        let isDragging = false; let startDragX = 0; let startDragY = 0;
+
+        // Elementos UI
+        const imageUpload = document.getElementById('imageUpload');
+        const cropUI = document.getElementById('crop-ui');
+        const cropCanvas = document.getElementById('crop-canvas');
+        const cropCtx = cropCanvas.getContext('2d');
+        const zoomSlider = document.getElementById('zoomSlider');
+        const generateBtn = document.getElementById('generateBtn');
+
+        // ==========================================
+        // 1. CARREGAMENTO E CORTE DA IMAGEM
+        // ==========================================
+        imageUpload.addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(event) {
+                userImage.onload = function() {
+                    // Calcula o zoom inicial para cobrir o quadrado todo
+                    const scaleToFit = Math.max(BOARD_SIZE / userImage.width, BOARD_SIZE / userImage.height);
+                    imgScale = scaleToFit;
+                    
+                    // Centraliza a imagem no quadro
+                    imgPanX = (BOARD_SIZE - (userImage.width * imgScale)) / 2;
+                    imgPanY = (BOARD_SIZE - (userImage.height * imgScale)) / 2;
+
+                    zoomSlider.min = scaleToFit * 0.5;
+                    zoomSlider.max = scaleToFit * 4;
+                    zoomSlider.value = imgScale;
+
+                    cropUI.classList.remove('hidden');
+                    drawCropView();
+                };
+                userImage.src = event.target.result;
+            };
+            reader.readAsDataURL(file);
+        });
+
+        // Atualiza zoom
+        zoomSlider.addEventListener('input', function(e) {
+            const centerX = BOARD_SIZE / 2;
+            const centerY = BOARD_SIZE / 2;
+            const oldScale = imgScale;
+            imgScale = parseFloat(e.target.value);
+            
+            // Mantém o centro da imagem no lugar enquanto dá zoom
+            imgPanX = centerX - (centerX - imgPanX) * (imgScale / oldScale);
+            imgPanY = centerY - (centerY - imgPanY) * (imgScale / oldScale);
+            drawCropView();
+        });
+
+        // Arrasta (Pan)
+        cropCanvas.addEventListener('pointerdown', (e) => {
+            isDragging = true;
+            startDragX = e.clientX - imgPanX;
+            startDragY = e.clientY - imgPanY;
+        });
+
+        window.addEventListener('pointermove', (e) => {
+            if (!isDragging) return;
+            imgPanX = e.clientX - startDragX;
+            imgPanY = e.clientY - startDragY;
+            drawCropView();
+        });
+
+        window.addEventListener('pointerup', () => isDragging = false);
+
+        function drawCropView() {
+            cropCtx.fillStyle = '#000';
+            cropCtx.fillRect(0, 0, BOARD_SIZE, BOARD_SIZE);
+            cropCtx.drawImage(userImage, imgPanX, imgPanY, userImage.width * imgScale, userImage.height * imgScale);
+            
+            // Grade de referência (8x8) transparente
+            cropCtx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
+            cropCtx.lineWidth = 1;
+            cropCtx.beginPath();
+            for(let i = 1; i < 8; i++) {
+                cropCtx.moveTo(0, i * (BOARD_SIZE/8));
+                cropCtx.lineTo(BOARD_SIZE, i * (BOARD_SIZE/8));
+                cropCtx.moveTo(i * (BOARD_SIZE/8), 0);
+                cropCtx.lineTo(i * (BOARD_SIZE/8), BOARD_SIZE);
+            }
+            cropCtx.stroke();
         }
 
-        function sfxSelect() { playTone(600, 'sine', 0.1); }
-        function sfxError() { playTone(150, 'sawtooth', 0.2); }
-        function sfxMatch() {
-            playTone(440, 'square', 0.1, 0);      
-            playTone(554, 'square', 0.1, 0.08);   
-            playTone(659, 'square', 0.2, 0.16);   
-        }
-        function sfxGameOver() {
-            playTone(300, 'sawtooth', 0.3, 0);
-            playTone(250, 'sawtooth', 0.3, 0.3);
-            playTone(200, 'sawtooth', 0.6, 0.6);
-        }
-        function sfxWin() {
-            playTone(440, 'square', 0.1, 0);
-            playTone(554, 'square', 0.1, 0.1);
-            playTone(659, 'square', 0.1, 0.2);
-            playTone(880, 'square', 0.3, 0.3);
-        }
+        // ==========================================
+        // 2. ENCODER: CONVERTER PARA BASE64 E BAIXAR
+        // ==========================================
+        generateBtn.addEventListener('click', function() {
+            // Desenha a imagem cortada pura num canvas invisível temporário
+            const tempCanvas = document.createElement('canvas');
+            tempCanvas.width = BOARD_SIZE;
+            tempCanvas.height = BOARD_SIZE;
+            const tempCtx = tempCanvas.getContext('2d');
+            
+            tempCtx.fillStyle = '#000';
+            tempCtx.fillRect(0, 0, BOARD_SIZE, BOARD_SIZE);
+            tempCtx.drawImage(userImage, imgPanX, imgPanY, userImage.width * imgScale, userImage.height * imgScale);
+
+            // Pega os dados dos pixels
+            const imgData = tempCtx.getImageData(0, 0, BOARD_SIZE, BOARD_SIZE).data;
+            
+            // Cria um Array de Bytes apenas para o nível de cinza (1 byte por pixel em vez de 4 do RGBA)
+            const grayBytes = new Uint8Array(BOARD_SIZE * BOARD_SIZE);
+            for(let i = 0; i < imgData.length; i += 4) {
+                // R * 0.299 + G * 0.587 + B * 0.114
+                grayBytes[i / 4] = Math.floor(imgData[i] * 0.299 + imgData[i+1] * 0.587 + imgData[i+2] * 0.114);
+            }
+
+            // Converte os Bytes para uma String Binária e depois para Base64 Seguro
+            let binaryString = '';
+            // Construímos a string em pequenos lotes para não estourar a memória do navegador
+            for (let i = 0; i < grayBytes.length; i++) {
+                binaryString += String.fromCharCode(grayBytes[i]);
+            }
+            
+            const base64String = btoa(binaryString);
+            
+            // Cria a string final com os metadados
+            const finalTxtData = `${BOARD_SIZE},${BOARD_SIZE}|${base64String}`;
+
+            // Dispara o Download
+            const blob = new Blob([finalTxtData], { type: 'text/plain' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement("a");
+            link.href = url;
+            link.download = "bg_candy_crush.txt";
+            document.body.appendChild(link);
+            link.click();
+            setTimeout(() => { document.body.removeChild(link); URL.revokeObjectURL(url); }, 100);
+
+            // Já preenche a área de teste para o usuário não ter que abrir o arquivo se não quiser
+            document.getElementById('base64Input').value = finalTxtData;
+            alert("Sucesso! Código gerado. Você pode copiar o texto da caixa de teste ou abrir o arquivo .txt baixado.");
+        });
 
         // ==========================================
-        // VARIÁVEIS DO JOGO
+        // 3. DECODER: TESTAR A STRING GERADA
         // ==========================================
-        const canvas = document.getElementById('game-canvas');
-        const ctx = canvas.getContext('2d');
-        const scoreEl = document.getElementById('score');
-        const remainingEl = document.getElementById('remaining');
-        const levelEl = document.getElementById('level');
-        const messagePanel = document.getElementById('message-panel');
-        const restartBtn = document.getElementById('restartBtn');
-        const endTitle = document.getElementById('end-title');
-        const endDesc = document.getElementById('end-desc');
-        const loadingScreen = document.getElementById('loading-screen');
-        const loadingText = document.getElementById('loading-text');
+        const testBtn = document.getElementById('testBtn');
+        const testCanvas = document.getElementById('test-canvas');
+        const testCtx = testCanvas.getContext('2d');
 
-        const ROWS = 8;
-        const COLS = 8;
-        const CELL_SIZE = 45;
-        canvas.width = COLS * CELL_SIZE; 
-        canvas.height = ROWS * CELL_SIZE; 
+        testBtn.addEventListener('click', function() {
+            const input = document.getElementById('base64Input').value.trim();
+            if(!input) return alert("Cole o código gerado primeiro!");
 
-        const CANDIES = ['🍎', '🍇', '🍊', '🫐', '🍋', '🍉'];
-        let grid = [];
-        let score = 0;
-        let selected = null; 
-        let isProcessing = false; 
-
-        let revealedGrid = []; 
-        let hiddenCount = ROWS * COLS;
-        let isGameWon = false;
-
-        // Controle de Fases e Assets
-        const XOR_KEY = 42;
-        let levelImages = []; // Array que guardará as imagens coloridas na memória RAM
-        let currentLevel = 0;
-
-        // ==========================================
-        // O DESCOMPACTADOR DO ASSET BUNDLE (sys_config.bin)
-        // ==========================================
-        async function loadAssetBundle() {
             try {
-                // Tenta baixar o pacote protegido da pasta assets
-                const response = await fetch('./assets/sys_config.bin');
-                if (!response.ok) throw new Error("Pacote de assets não encontrado.");
-                
-                const buffer = await response.arrayBuffer();
-                const data = new Uint8Array(buffer);
+                // Separa metadados da imagem Base64
+                const parts = input.split('|');
+                const dims = parts[0].split(',');
+                const width = parseInt(dims[0]);
+                const height = parseInt(dims[1]);
+                const base64Data = parts[1];
 
-                loadingText.textContent = "Descriptografando...";
+                // Desfaz o Base64 para String Binária
+                const binaryString = atob(base64Data);
 
-                // 1. Remove a máscara XOR de todo o arquivo
-                for (let i = 0; i < data.length; i++) {
-                    data[i] = data[i] ^ XOR_KEY;
+                // Configura o Canvas de teste
+                testCanvas.width = width;
+                testCanvas.height = height;
+                const newImgData = testCtx.createImageData(width, height);
+                const data = newImgData.data;
+
+                // Restaura cada pixel (Espalhando o tom de cinza para o RGB do canvas)
+                for (let i = 0; i < binaryString.length; i++) {
+                    const grayValue = binaryString.charCodeAt(i);
+                    const idx = i * 4;
+                    data[idx]     = grayValue; // Red
+                    data[idx + 1] = grayValue; // Green
+                    data[idx + 2] = grayValue; // Blue
+                    data[idx + 3] = 255;       // Alpha (opacidade)
                 }
 
-                // 2. Encontra o fim do cabeçalho (O caractere '|')
-                let headerEndIndex = -1;
-                for (let i = 0; i < data.length; i++) {
-                    if (data[i] === 124) { // 124 é '|' na tabela ASCII
-                        headerEndIndex = i;
-                        break;
-                    }
-                }
-
-                if(headerEndIndex === -1) throw new Error("Arquivo corrompido.");
-
-                // 3. Lê os tamanhos das imagens no cabeçalho
-                const headerBytes = data.slice(0, headerEndIndex);
-                const headerStr = new TextDecoder().decode(headerBytes);
-                const imageSizes = headerStr.split(',').map(Number);
-
-                // 4. Corta o arquivo em pedaços e gera os Links Virtuais das fotos
-                let offset = headerEndIndex + 1;
-                for(let i = 0; i < imageSizes.length; i++) {
-                    const size = imageSizes[i];
-                    if (size > 0) {
-                        const imgData = data.slice(offset, offset + size);
-                        const blob = new Blob([imgData], { type: 'image/jpeg' });
-                        const url = URL.createObjectURL(blob);
-                        
-                        // Cria um elemento Image() real na RAM
-                        const img = new Image();
-                        img.src = url;
-                        
-                        // Espera a imagem carregar na memória
-                        await new Promise(resolve => { img.onload = resolve; });
-                        
-                        levelImages.push(img);
-                        offset += size;
-                    }
-                }
-
-                console.log(`Carregadas ${levelImages.length} fases com sucesso!`);
-                loadingScreen.classList.add('hidden');
-                initLevel(0); // Inicia a primeira fase
+                testCtx.putImageData(newImgData, 0, 0);
+                testCanvas.classList.remove('hidden');
 
             } catch (err) {
+                alert("Código Base64 inválido ou corrompido!");
                 console.error(err);
-                loadingText.textContent = "Erro ao carregar fases!";
-                loadingText.style.color = "red";
-            }
-        }
-
-        // ==========================================
-        // INICIALIZAÇÃO DE FASE
-        // ==========================================
-        function initLevel(levelIndex) {
-            currentLevel = levelIndex;
-            levelEl.textContent = currentLevel + 1;
-            score = 0;
-            scoreEl.textContent = score;
-            
-            startBoard();
-        }
-
-        function startBoard() {
-            hiddenCount = ROWS * COLS;
-            isGameWon = false;
-            remainingEl.textContent = hiddenCount;
-            messagePanel.classList.add('hidden');
-            
-            revealedGrid = [];
-            for (let r = 0; r < ROWS; r++) {
-                let row = [];
-                for (let c = 0; c < COLS; c++) { row.push(false); }
-                revealedGrid.push(row);
-            }
-
-            do {
-                generateCleanBoard();
-            } while (!hasPossibleMoves());
-
-            isProcessing = false;
-            drawBoard();
-        }
-
-        function generateCleanBoard() {
-            grid = [];
-            for (let r = 0; r < ROWS; r++) {
-                let row = [];
-                for (let c = 0; c < COLS; c++) {
-                    let randomCandy;
-                    do {
-                        randomCandy = CANDIES[Math.floor(Math.random() * CANDIES.length)];
-                    } while (
-                        (c >= 2 && row[c-1] === randomCandy && row[c-2] === randomCandy) ||
-                        (r >= 2 && grid[r-1][c] === randomCandy && grid[r-2][c] === randomCandy)
-                    );
-                    row.push(randomCandy);
-                }
-                grid.push(row);
-            }
-        }
-
-        // ==========================================
-        // RENDERIZAÇÃO
-        // ==========================================
-        function drawBoard() {
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-            // Desenha a imagem da FASE ATUAL
-            if (levelImages[currentLevel]) {
-                ctx.drawImage(levelImages[currentLevel], 0, 0, canvas.width, canvas.height);
-            } else {
-                ctx.fillStyle = '#222';
-                ctx.fillRect(0, 0, canvas.width, canvas.height);
-            }
-
-            if (isGameWon) return; 
-
-            for (let r = 0; r < ROWS; r++) {
-                for (let c = 0; c < COLS; c++) {
-                    const x = c * CELL_SIZE;
-                    const y = r * CELL_SIZE;
-
-                    if (revealedGrid[r][c] === true) {
-                        ctx.fillStyle = 'rgba(0, 0, 0, 0.65)'; 
-                    } else {
-                        ctx.fillStyle = '#000000'; 
-                    }
-                    ctx.fillRect(x, y, CELL_SIZE, CELL_SIZE);
-
-                    ctx.strokeStyle = 'rgba(255, 255, 255, 0.05)';
-                    ctx.lineWidth = 1;
-                    ctx.strokeRect(x, y, CELL_SIZE, CELL_SIZE);
-
-                    if (selected && selected.r === r && selected.c === c) {
-                        ctx.fillStyle = 'rgba(0, 210, 255, 0.3)';
-                        ctx.fillRect(x, y, CELL_SIZE, CELL_SIZE);
-                        ctx.strokeStyle = '#00d2ff';
-                        ctx.lineWidth = 3;
-                        ctx.strokeRect(x+2, y+2, CELL_SIZE-4, CELL_SIZE-4);
-                    }
-
-                    if (grid[r][c]) {
-                        ctx.font = '28px Arial';
-                        ctx.textAlign = 'center';
-                        ctx.textBaseline = 'middle';
-                        ctx.fillText(grid[r][c], x + CELL_SIZE/2, y + CELL_SIZE/2 + 2);
-                    }
-                }
-            }
-        }
-
-        // ==========================================
-        // LÓGICA DE JOGO
-        // ==========================================
-        function findMatches() {
-            let matchedSet = new Set();
-            for (let r = 0; r < ROWS; r++) {
-                for (let c = 0; c < COLS - 2; c++) {
-                    let candy = grid[r][c];
-                    if (!candy) continue;
-                    let matchLen = 1;
-                    while (c + matchLen < COLS && grid[r][c + matchLen] === candy) matchLen++;
-                    if (matchLen >= 3) {
-                        for (let i = 0; i < matchLen; i++) matchedSet.add(`${r},${c + i}`);
-                    }
-                }
-            }
-            for (let c = 0; c < COLS; c++) {
-                for (let r = 0; r < ROWS - 2; r++) {
-                    let candy = grid[r][c];
-                    if (!candy) continue;
-                    let matchLen = 1;
-                    while (r + matchLen < ROWS && grid[r + matchLen][c] === candy) matchLen++;
-                    if (matchLen >= 3) {
-                        for (let i = 0; i < matchLen; i++) matchedSet.add(`${r + i},${c}`);
-                    }
-                }
-            }
-            return Array.from(matchedSet).map(str => {
-                const parts = str.split(',');
-                return { r: parseInt(parts[0]), c: parseInt(parts[1]) };
-            });
-        }
-
-        function hasPossibleMoves() {
-            for (let r = 0; r < ROWS; r++) {
-                for (let c = 0; c < COLS; c++) {
-                    if (c < COLS - 1) {
-                        swapInGrid(r, c, r, c + 1);
-                        let matches = findMatches();
-                        swapInGrid(r, c, r, c + 1); 
-                        if (matches.length > 0) return true;
-                    }
-                    if (r < ROWS - 1) {
-                        swapInGrid(r, c, r + 1, c);
-                        let matches = findMatches();
-                        swapInGrid(r, c, r + 1, c);
-                        if (matches.length > 0) return true; 
-                    }
-                }
-            }
-            return false;
-        }
-
-        function swapInGrid(r1, c1, r2, c2) {
-            let temp = grid[r1][c1];
-            grid[r1][c1] = grid[r2][c2];
-            grid[r2][c2] = temp;
-        }
-
-        function processMatches() {
-            let matches = findMatches();
-            
-            if (matches.length === 0) {
-                if (!isGameWon && !hasPossibleMoves()) {
-                    endTitle.textContent = "Sem Movimentos";
-                    endTitle.style.color = "#ff3333";
-                    endDesc.textContent = "O tabuleiro travou.";
-                    endDesc.classList.remove('hidden');
-                    restartBtn.textContent = "Tentar Fase Novamente";
-                    sfxGameOver();
-                    messagePanel.classList.remove('hidden');
-                }
-                isProcessing = false; 
-                return false; 
-            }
-
-            sfxMatch();
-            score += matches.length * 10;
-            scoreEl.textContent = score;
-
-            let bottomRowExplosions = matches.filter(m => m.r === ROWS - 1).length;
-            if (bottomRowExplosions > 0 && hiddenCount > 0) {
-                revealRandomCells(bottomRowExplosions);
-            }
-
-            matches.forEach(m => { grid[m.r][m.c] = null; });
-            drawBoard();
-
-            setTimeout(() => {
-                applyGravity();
-                drawBoard();
-                setTimeout(() => {
-                    refillBoard();
-                    drawBoard();
-                    setTimeout(processMatches, 300);
-                }, 200);
-            }, 300);
-            return true;
-        }
-
-        function revealRandomCells(quantity) {
-            let unrevealedCells = [];
-            for (let r = 0; r < ROWS; r++) {
-                for (let c = 0; c < COLS; c++) {
-                    if (revealedGrid[r][c] === false) {
-                        unrevealedCells.push({r: r, c: c});
-                    }
-                }
-            }
-
-            let cellsToReveal = Math.min(quantity, unrevealedCells.length);
-
-            for (let i = 0; i < cellsToReveal; i++) {
-                let randomIndex = Math.floor(Math.random() * unrevealedCells.length);
-                let selectedCell = unrevealedCells.splice(randomIndex, 1)[0];
-                revealedGrid[selectedCell.r][selectedCell.c] = true;
-                hiddenCount--;
-            }
-
-            remainingEl.textContent = hiddenCount;
-
-            if (hiddenCount === 0 && !isGameWon) {
-                isGameWon = true;
-                setTimeout(() => {
-                    drawBoard(); 
-                    sfxWin();
-                    
-                    if (currentLevel < levelImages.length - 1) {
-                        endTitle.textContent = "Fase Concluída!";
-                        endTitle.style.color = "#00ff00";
-                        endDesc.classList.add('hidden');
-                        restartBtn.textContent = "Próxima Fase";
-                    } else {
-                        endTitle.textContent = "Zeradou!";
-                        endTitle.style.color = "#ffdd00";
-                        endDesc.textContent = "Você terminou todas as imagens!";
-                        endDesc.classList.remove('hidden');
-                        restartBtn.textContent = "Jogar Tudo de Novo";
-                    }
-                    messagePanel.classList.remove('hidden');
-                }, 500); 
-            }
-        }
-
-        function applyGravity() {
-            for (let c = 0; c < COLS; c++) {
-                let emptySpaces = 0;
-                for (let r = ROWS - 1; r >= 0; r--) {
-                    if (grid[r][c] === null) {
-                        emptySpaces++;
-                    } else if (emptySpaces > 0) {
-                        grid[r + emptySpaces][c] = grid[r][c];
-                        grid[r][c] = null;
-                    }
-                }
-            }
-        }
-
-        function refillBoard() {
-            for (let c = 0; c < COLS; c++) {
-                for (let r = 0; r < ROWS; r++) {
-                    if (grid[r][c] === null) {
-                        grid[r][c] = CANDIES[Math.floor(Math.random() * CANDIES.length)];
-                    }
-                }
-            }
-        }
-
-        canvas.addEventListener('pointerdown', function(e) {
-            if (audioCtx.state === 'suspended') audioCtx.resume();
-            if (isProcessing || isGameWon) return; 
-
-            const rect = canvas.getBoundingClientRect();
-            const x = (e.clientX - rect.left) * (canvas.width / rect.width);
-            const y = (e.clientY - rect.top) * (canvas.height / rect.height);
-            
-            const c = Math.floor(x / CELL_SIZE);
-            const r = Math.floor(y / CELL_SIZE);
-
-            if (!selected) {
-                sfxSelect();
-                selected = {r, c};
-                drawBoard();
-            } else {
-                let isAdjacent = Math.abs(selected.r - r) + Math.abs(selected.c - c) === 1;
-
-                if (isAdjacent) {
-                    isProcessing = true;
-                    let prevR = selected.r; let prevC = selected.c;
-                    swapInGrid(prevR, prevC, r, c);
-                    selected = null;
-                    drawBoard();
-
-                    setTimeout(() => {
-                        let matches = findMatches();
-                        if (matches.length > 0) {
-                            processMatches();
-                        } else {
-                            sfxError();
-                            swapInGrid(r, c, prevR, prevC);
-                            isProcessing = false;
-                            drawBoard();
-                        }
-                    }, 250);
-                } else {
-                    sfxSelect();
-                    selected = {r, c};
-                    drawBoard();
-                }
             }
         });
-
-        restartBtn.addEventListener('click', () => {
-            sfxSelect();
-            if (hiddenCount === 0) {
-                // Venceu a fase
-                if (currentLevel < levelImages.length - 1) {
-                    initLevel(currentLevel + 1); // Vai para a próxima
-                } else {
-                    initLevel(0); // Zerou o jogo, recomeça da primeira
-                }
-            } else {
-                // Perdeu, recomeça a mesma fase
-                startBoard();
-            }
-        });
-
-        // ==========================================
-        // BOOT DO JOGO (Download dos Assets)
-        // ==========================================
-        loadAssetBundle();
-
     </script>
 </body>
 </html>
