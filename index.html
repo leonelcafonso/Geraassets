@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Asset Studio: Empacotador Criptografado</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #1a1a24;
+            color: #e0e0e0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px;
+            margin: 0;
+        }
+
+        .panel {
+            background: #252533;
+            padding: 25px;
+            border-radius: 12px;
+            border: 1px solid #3a3a4f;
+            max-width: 700px;
+            width: 100%;
+            text-align: center;
+        }
+
+        h2 { color: #ff5e62; margin-top: 0; }
+        p { color: #aaa; font-size: 14px; margin-bottom: 20px; }
+
+        /* Grid de 10 Slots */
+        .slots-grid {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 15px;
+            margin-bottom: 25px;
+        }
+
+        .slot {
+            background: #1e1e2a;
+            border: 2px dashed #444466;
+            border-radius: 8px;
+            aspect-ratio: 1 / 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            overflow: hidden;
+            position: relative;
+            transition: border-color 0.2s;
+        }
+        
+        .slot:hover { border-color: #ff5e62; }
+        .slot img { width: 100%; height: 100%; object-fit: cover; }
+        .slot .label { position: absolute; background: rgba(0,0,0,0.7); width: 100%; bottom: 0; font-size: 12px; padding: 5px 0; }
+
+        input[type="file"] { display: none; }
+
+        .btn {
+            display: inline-block;
+            padding: 12px 24px;
+            background: linear-gradient(90deg, #ff9966 0%, #ff5e62 100%);
+            color: #fff;
+            border: none;
+            border-radius: 8px;
+            font-weight: bold;
+            cursor: pointer;
+            font-size: 16px;
+            transition: opacity 0.2s;
+        }
+        .btn:hover { opacity: 0.8; }
+        .btn:disabled { background: #555; cursor: not-allowed; opacity: 0.5; }
+
+        /* Modal do Editor */
+        #editor-modal {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0, 0, 0, 0.9);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 100;
+        }
+
+        #crop-canvas {
+            background-color: #000;
+            border: 2px dashed #ff5e62;
+            border-radius: 8px;
+            cursor: move;
+            user-select: none;
+            touch-action: none;
+        }
+
+        .editor-controls { margin-top: 20px; display: flex; gap: 15px; align-items: center; }
+        input[type="range"] { width: 200px; }
+        .hidden { display: none !important; }
+    </style>
+</head>
+<body>
+
+    <div class="panel">
+        <h2>Pacote de Assets (Colorido)</h2>
+        <p>Clique em um slot para carregar, cortar e converter sua imagem para JPG criptografado.</p>
+        
+        <div class="slots-grid" id="slots-container">
+            <!-- Os 10 slots serão gerados via JS -->
+        </div>
+
+        <input type="file" id="imageUpload" accept="image/*">
+        
+        <button id="generateBtn" class="btn" disabled>Gerar sys_config.bin</button>
+    </div>
+
+    <!-- Modal de Edição (Corte e Zoom) -->
+    <div id="editor-modal" class="hidden">
+        <h3 style="color: #ff5e62;">Ajuste o Enquadramento</h3>
+        <canvas id="crop-canvas" width="360" height="360"></canvas>
+        
+        <div class="editor-controls">
+            <span>-</span>
+            <input type="range" id="zoomSlider" min="0.1" max="3" step="0.01" value="1">
+            <span>+</span>
+        </div>
+        
+        <div class="editor-controls" style="margin-top: 15px;">
+            <button id="cancelBtn" class="btn" style="background: #555;">Cancelar</button>
+            <button id="confirmBtn" class="btn">Salvar JPG</button>
+        </div>
+    </div>
+
+    <script>
+        const MAX_IMAGES = 10;
+        const BOARD_SIZE = 360;
+        const XOR_KEY = 42; // A nossa "senha" criptográfica
+
+        // Memória do Estúdio
+        let processedImages = new Array(MAX_IMAGES).fill(null); // Vai guardar os bytes de cada JPG
+        let currentSlot = -1;
+
+        // UI Elements
+        const slotsContainer = document.getElementById('slots-container');
+        const imageUpload = document.getElementById('imageUpload');
+        const generateBtn = document.getElementById('generateBtn');
+        const editorModal = document.getElementById('editor-modal');
+        const cropCanvas = document.getElementById('crop-canvas');
+        const cropCtx = cropCanvas.getContext('2d');
+        const zoomSlider = document.getElementById('zoomSlider');
+        const cancelBtn = document.getElementById('cancelBtn');
+        const confirmBtn = document.getElementById('confirmBtn');
+
+        // Editor Variables
+        let userImage = new Image();
+        let imgPanX = 0, imgPanY = 0, imgScale = 1;
+        let isDragging = false, startDragX = 0, startDragY = 0;
+
+        // 1. GERAR OS 10 SLOTS NA TELA
+        for (let i = 0; i < MAX_IMAGES; i++) {
+            const slot = document.createElement('div');
+            slot.className = 'slot';
+            slot.id = `slot-${i}`;
+            slot.innerHTML = `<span style="color: #666; font-size: 24px;">+</span><div class="label">Nível ${i+1}</div>`;
+            slot.addEventListener('click', () => {
+                currentSlot = i;
+                imageUpload.click();
+            });
+            slotsContainer.appendChild(slot);
+        }
+
+        // 2. ABRIR O EDITOR AO SELECIONAR ARQUIVO
+        imageUpload.addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(event) {
+                userImage = new Image();
+                userImage.onload = function() {
+                    const scaleToFit = Math.max(BOARD_SIZE / userImage.width, BOARD_SIZE / userImage.height);
+                    imgScale = scaleToFit;
+                    imgPanX = (BOARD_SIZE - (userImage.width * imgScale)) / 2;
+                    imgPanY = (BOARD_SIZE - (userImage.height * imgScale)) / 2;
+
+                    zoomSlider.min = scaleToFit * 0.5;
+                    zoomSlider.max = scaleToFit * 4;
+                    zoomSlider.value = imgScale;
+
+                    editorModal.classList.remove('hidden');
+                    drawCropView();
+                };
+                userImage.src = event.target.result;
+            };
+            reader.readAsDataURL(file);
+            imageUpload.value = ''; // Limpa o input para poder subir o mesmo arquivo de novo se quiser
+        });
+
+        // Controles do Editor
+        zoomSlider.addEventListener('input', function(e) {
+            const centerX = BOARD_SIZE / 2;
+            const centerY = BOARD_SIZE / 2;
+            const oldScale = imgScale;
+            imgScale = parseFloat(e.target.value);
+            imgPanX = centerX - (centerX - imgPanX) * (imgScale / oldScale);
+            imgPanY = centerY - (centerY - imgPanY) * (imgScale / oldScale);
+            drawCropView();
+        });
+
+        cropCanvas.addEventListener('pointerdown', (e) => {
+            isDragging = true;
+            startDragX = e.clientX - imgPanX;
+            startDragY = e.clientY - imgPanY;
+        });
+
+        window.addEventListener('pointermove', (e) => {
+            if (!isDragging) return;
+            imgPanX = e.clientX - startDragX;
+            imgPanY = e.clientY - startDragY;
+            drawCropView();
+        });
+
+        window.addEventListener('pointerup', () => isDragging = false);
+
+        function drawCropView() {
+            // Fundo preto (Previne problemas se a imagem enviada for PNG transparente)
+            cropCtx.fillStyle = '#000';
+            cropCtx.fillRect(0, 0, BOARD_SIZE, BOARD_SIZE);
+            cropCtx.drawImage(userImage, imgPanX, imgPanY, userImage.width * imgScale, userImage.height * imgScale);
+            
+            // Grade
+            cropCtx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
+            cropCtx.lineWidth = 1;
+            cropCtx.beginPath();
+            for(let i = 1; i < 8; i++) {
+                cropCtx.moveTo(0, i * (BOARD_SIZE/8));
+                cropCtx.lineTo(BOARD_SIZE, i * (BOARD_SIZE/8));
+                cropCtx.moveTo(i * (BOARD_SIZE/8), 0);
+                cropCtx.lineTo(i * (BOARD_SIZE/8), BOARD_SIZE);
+            }
+            cropCtx.stroke();
+        }
+
+        cancelBtn.addEventListener('click', () => editorModal.classList.add('hidden'));
+
+        // 3. CONFIRMAR, CONVERTER PARA JPG E SALVAR NA MEMÓRIA
+        confirmBtn.addEventListener('click', () => {
+            // Desenha a imagem pura sem a grade em um canvas temporário
+            const tempCanvas = document.createElement('canvas');
+            tempCanvas.width = BOARD_SIZE; tempCanvas.height = BOARD_SIZE;
+            const tempCtx = tempCanvas.getContext('2d');
+            tempCtx.fillStyle = '#000';
+            tempCtx.fillRect(0, 0, BOARD_SIZE, BOARD_SIZE);
+            tempCtx.drawImage(userImage, imgPanX, imgPanY, userImage.width * imgScale, userImage.height * imgScale);
+
+            // A MÁGICA DO JPG: Força a conversão para jpeg ignorando o formato original
+            const dataUrl = tempCanvas.toDataURL('image/jpeg', 0.85); // Qualidade de 85%
+            
+            // Atualiza a Thumbnail no Slot
+            const slot = document.getElementById(`slot-${currentSlot}`);
+            slot.innerHTML = `<img src="${dataUrl}"><div class="label">Nível ${currentSlot+1}</div>`;
+
+            // Transforma o Base64 do DataURL de volta para Bytes Reais e guarda na memória
+            const base64Data = dataUrl.split(',')[1];
+            const binaryString = atob(base64Data);
+            const bytes = new Uint8Array(binaryString.length);
+            for (let i = 0; i < binaryString.length; i++) {
+                bytes[i] = binaryString.charCodeAt(i);
+            }
+            
+            processedImages[currentSlot] = bytes;
+            editorModal.classList.add('hidden');
+            checkReadyStatus();
+        });
+
+        function checkReadyStatus() {
+            // Habilita o botão de gerar se tiver pelo menos 1 imagem preenchida
+            const hasAtLeastOne = processedImages.some(img => img !== null);
+            generateBtn.disabled = !hasAtLeastOne;
+        }
+
+        // 4. O EMPACOTADOR XOR (CRIAR O SYS_CONFIG.BIN)
+        generateBtn.addEventListener('click', () => {
+            // Coleta os tamanhos de cada imagem na ordem exata. Se não tiver imagem, tamanho é 0.
+            const sizes = processedImages.map(img => img ? img.length : 0);
+            
+            // Cria um cabeçalho em texto para que o Jogo saiba como cortar o arquivo depois
+            // Ex: "45000,0,32000,..."
+            const headerStr = sizes.join(',') + '|';
+            const headerBytes = new TextEncoder().encode(headerStr);
+
+            // Calcula o tamanho total do "Bloco"
+            let totalLength = headerBytes.length;
+            processedImages.forEach(img => { if(img) totalLength += img.length; });
+
+            // Cria o "Arquivo Único" em branco
+            const finalBuffer = new Uint8Array(totalLength);
+            
+            // Cola o cabeçalho no começo
+            finalBuffer.set(headerBytes, 0);
+
+            // Cola as imagens em seguida, uma após a outra
+            let offset = headerBytes.length;
+            processedImages.forEach(img => {
+                if(img) {
+                    finalBuffer.set(img, offset);
+                    offset += img.length;
+                }
+            });
+
+            // A MÁSCARA XOR: Varre cada byte do arquivo único e inverte com a chave 42
+            // Isso destrói o cabeçalho das imagens JPG. Se tentar abrir, dá erro.
+            for (let i = 0; i < finalBuffer.length; i++) {
+                finalBuffer[i] = finalBuffer[i] ^ XOR_KEY;
+            }
+
+            // Inicia o download com o nome camuflado
+            const blob = new Blob([finalBuffer], { type: 'application/octet-stream' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement("a");
+            link.href = url;
+            link.download = "sys_config.bin";
+            document.body.appendChild(link);
+            link.click();
+            setTimeout(() => { document.body.removeChild(link); URL.revokeObjectURL(url); }, 100);
+        });
+    </script>
+</body>
+</html>
